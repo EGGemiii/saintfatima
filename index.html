@@ -234,6 +234,93 @@ body.is-admin .admin-flex{display:flex} .admin-flex{display:none}
   }
 }
 
+
+.vendor-name-link{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:0;
+  background:transparent;
+  color:var(--primary);
+  font-weight:800;
+  padding:0;
+  cursor:pointer;
+  text-align:right;
+}
+.vendor-name-link:hover{text-decoration:underline}
+.vendor-tx-summary{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  margin-bottom:14px;
+}
+.vendor-tx-summary .mini-card{box-shadow:none}
+.vendor-tx-list{display:grid;gap:10px}
+.vendor-tx-item{
+  border:1px solid var(--line);
+  border-radius:13px;
+  padding:12px;
+  background:var(--panel);
+}
+.vendor-tx-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  margin-bottom:8px;
+}
+.vendor-tx-title{font-weight:800;font-size:13px}
+.vendor-tx-amount{font-weight:800;font-size:15px;white-space:nowrap}
+.vendor-tx-details{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px 12px;
+  font-size:11px;
+  color:var(--muted);
+}
+.vendor-tx-details b{display:block;color:var(--text);margin-top:2px;font-weight:700}
+.vendor-tx-notes{
+  margin-top:9px;
+  padding-top:9px;
+  border-top:1px solid var(--line);
+  font-size:11px;
+  color:var(--muted);
+  line-height:1.6;
+}
+.vendor-tx-receipts{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:9px;
+}
+@media(max-width:760px){
+  .vendor-tx-summary{grid-template-columns:1fr}
+  .vendor-tx-details{grid-template-columns:1fr 1fr}
+  .vendor-tx-top{align-items:center}
+}
+@media(max-width:430px){
+  .vendor-tx-details{grid-template-columns:1fr}
+}
+
+
+/* Strict visitor/admin visibility */
+.admin-only,
+.admin-flex{
+  display:none !important;
+}
+body.is-admin .admin-only{
+  display:revert !important;
+}
+body.is-admin .admin-flex{
+  display:flex !important;
+}
+body:not(.is-admin) [data-admin-page="true"]{
+  display:none !important;
+}
+body.is-admin .page[data-admin-page="true"].active{
+  display:block !important;
+}
+
 </style>
 </head>
 <body>
@@ -249,7 +336,7 @@ body.is-admin .admin-flex{display:flex} .admin-flex{display:none}
   <button data-page="vendors">الموردون والمقاولون</button>
   <button data-page="dues">المستحقات</button>
   <button data-page="tasks">المهام</button>
-  <button data-page="audit">سجل التعديلات</button>
+  <button class="admin-only" data-page="audit">سجل التعديلات</button>
  </div>
  <div class="user-card"><div id="roleText">👁️ وضع المشاهدة</div><div id="emailText" style="margin-top:5px"></div></div>
 </aside>
@@ -422,7 +509,7 @@ body.is-admin .admin-flex{display:flex} .admin-flex{display:none}
   </div>
  </section>
 
- <section class="page" id="audit">
+ <section class="page" id="audit" data-admin-page="true">
   <div class="card section">
    <div class="section-head"><div><h3>سجل التعديلات</h3><small>آخر التغييرات التي تمت على النظام</small></div></div>
    <div id="auditList" class="audit-list"></div>
@@ -485,6 +572,23 @@ body.is-admin .admin-flex{display:flex} .admin-flex{display:none}
  </div>
 </div>
 
+
+<div class="modal" id="vendorTransactionsModal">
+ <div class="modal-box" style="width:min(900px,96vw)">
+  <div class="modal-head">
+   <div>
+    <h3 id="vendorTxModalTitle" style="margin:0">معاملات المورد / المقاول</h3>
+    <small id="vendorTxModalSub" style="color:var(--muted)"></small>
+   </div>
+   <button class="btn" onclick="closeModal('vendorTransactionsModal')">✕</button>
+  </div>
+  <div class="modal-body">
+   <div id="vendorTxSummary" class="vendor-tx-summary"></div>
+   <div id="vendorTxList" class="vendor-tx-list"></div>
+  </div>
+ </div>
+</div>
+
 <div class="modal" id="imgModal" onclick="closeModal('imgModal')"><img id="bigImg" style="max-width:90vw;max-height:85vh;border-radius:14px"></div>
 
 <div id="backupStatus" class="backup-status"></div>
@@ -520,7 +624,20 @@ async function login(){
  if(error){$("loginError").textContent="تعذر تسجيل الدخول: "+error.message;return}
  currentUser=data.user; closeModal("loginModal"); updateRole(); renderAll();
 }
-async function logout(){await sb.auth.signOut(); currentUser=null; updateRole(); renderAll()}
+async function logout(){
+ await sb.auth.signOut();
+ currentUser=null;
+ updateRole();
+ const auditPage=$("audit");
+ if(auditPage?.classList.contains("active")){
+   document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
+   $("dashboard")?.classList.add("active");
+   document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));
+   document.querySelector('.nav button[data-page="dashboard"]')?.classList.add("active");
+   $("pageTitle").textContent="لوحة التحكم";
+ }
+ renderAll();
+}
 function updateRole(){
  document.body.classList.toggle("is-admin",isAdmin());
  $("loginBtn").classList.toggle("hidden",isAdmin()); $("logoutBtn").classList.toggle("hidden",!isAdmin());
@@ -1163,7 +1280,7 @@ function renderVendors(){
  });
  $("vendorsGrid").innerHTML=vendors.length?vendors.map(v=>`
    <div class="vendor-card">
-    <b>${esc(v.name)}</b>
+    <button class="vendor-name-link" onclick="openVendorTransactions('${v.id}')">👤 ${esc(v.name)}</button>
     <div class="small-muted">${esc(v.phone||"")}</div>
     <div style="margin-top:10px">إجمالي مسجل بالاسم: <b>${money(paidBy[v.name]||0)}</b></div>
     ${v.notes?`<div class="small-muted" style="margin-top:6px">${esc(v.notes)}</div>`:""}
@@ -1171,6 +1288,55 @@ function renderVendors(){
    </div>`).join(""):'<div class="empty" style="grid-column:1/-1">لا يوجد موردون أو مقاولون مسجلون.</div>';
  $("dueVendor").innerHTML='<option value="">بدون جهة محددة</option>'+vendors.map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join("");
 }
+
+function openVendorTransactions(vendorId){
+ const vendor=vendors.find(v=>v.id===vendorId);
+ if(!vendor)return;
+
+ // Current data model links financial transactions to a vendor by exact paid_to name.
+ const rows=transactions
+   .filter(t=>(t.paid_to||"").trim()===vendor.name.trim())
+   .sort((a,b)=>{
+     const da=a.transaction_date||"", db=b.transaction_date||"";
+     if(da!==db)return db.localeCompare(da);
+     return String(b.created_at||"").localeCompare(String(a.created_at||""));
+   });
+
+ const expenses=rows.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0);
+ const added=rows.filter(t=>t.type==="sent").reduce((s,t)=>s+Number(t.amount||0),0);
+
+ $("vendorTxModalTitle").textContent=vendor.name;
+ $("vendorTxModalSub").textContent=[vendor.phone,vendor.notes].filter(Boolean).join(" • ");
+
+ $("vendorTxSummary").innerHTML=`
+   <div class="mini-card"><div class="k">عدد المعاملات</div><div class="v">${rows.length}</div></div>
+   <div class="mini-card"><div class="k">إجمالي المصروف</div><div class="v">${money(expenses)}</div></div>
+   <div class="mini-card"><div class="k">إجمالي المبالغ المضافة</div><div class="v">${money(added)}</div></div>
+ `;
+
+ $("vendorTxList").innerHTML=rows.length?rows.map(t=>{
+   const recs=txReceipts(t);
+   return `<div class="vendor-tx-item">
+     <div class="vendor-tx-top">
+       <div>
+         <div class="vendor-tx-title">${esc(t.description||(t.type==="sent"?"مبلغ مضاف":"مصروف"))}</div>
+         <div style="margin-top:5px"><span class="badge ${t.type}">${t.type==="sent"?"مبلغ مضاف":"مصروف"}</span></div>
+       </div>
+       <div class="vendor-tx-amount">${money(t.amount)}</div>
+     </div>
+     <div class="vendor-tx-details">
+       <div>التاريخ<b>${t.transaction_date||"-"}</b></div>
+       <div>البند<b>${t.type==="sent"?"مبلغ مضاف":esc(t.category||"-")}</b></div>
+       <div>طريقة الدفع<b>${esc(t.payment_method||"-")}</b></div>
+     </div>
+     ${t.notes?`<div class="vendor-tx-notes"><b style="color:var(--text)">ملاحظات:</b> ${esc(t.notes)}</div>`:""}
+     ${recs.length?`<div class="vendor-tx-receipts">${recs.map(r=>`<img class="thumb" src="${receiptUrl(r.receipt_path)}" onclick="showImg('${r.receipt_path}')">`).join("")}</div>`:""}
+   </div>`;
+ }).join(""):'<div class="empty">لا توجد معاملات مالية مسجلة بهذا الاسم حتى الآن.</div>';
+
+ $("vendorTransactionsModal").classList.add("show");
+}
+
 async function addVendor(){
  if(!isAdmin())return;
  const name=$("vendorName").value.trim(); if(!name)return;
@@ -1252,6 +1418,7 @@ async function deleteTask(id){
  await loadData();
 }
 function renderAudit(){
+ if(!isAdmin()){ $("auditList").innerHTML=""; return; }
  $("auditList").innerHTML=auditLogs.length?auditLogs.map(a=>`
   <div class="audit-item"><b>${esc(a.action)} • ${esc(a.entity)}</b><span>${esc(a.details||"")}</span><span>${new Date(a.created_at).toLocaleString("ar-EG")} ${a.user_email?`• ${esc(a.user_email)}`:""}</span></div>
  `).join(""):'<div class="empty">لا توجد تعديلات مسجلة بعد.</div>';
@@ -1401,7 +1568,14 @@ function closeGalleryViewer(){
 }
 
 function showImg(path){$("bigImg").src=receiptUrl(path);$("imgModal").classList.add("show")}
-document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$(b.dataset.page).classList.add("active");$("pageTitle").textContent=b.textContent}));
+document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",()=>{
+ if(b.dataset.page==="audit"&&!isAdmin())return;
+ document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));
+ b.classList.add("active");
+ document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
+ $(b.dataset.page).classList.add("active");
+ $("pageTitle").textContent=b.textContent;
+}));
 window.addEventListener("click",e=>{if(e.target.classList.contains("modal"))e.target.classList.remove("show")});
 (async()=>{applyTheme();fillSelects();const {data}=await sb.auth.getUser();currentUser=data.user||null;updateRole();await loadData();sb.auth.onAuthStateChange((_e,s)=>{currentUser=s?.user||null;updateRole();renderAll()})})();
 </script>
