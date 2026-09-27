@@ -146,6 +146,27 @@ body.is-admin .admin-flex{display:flex} .admin-flex{display:none}
 .audit-item b{font-size:12px}.audit-item span{display:block;font-size:11px;color:var(--muted);margin-top:3px}
 @media(max-width:1000px){.stat-mini-grid,.vendor-grid{grid-template-columns:repeat(2,1fr)}.form-inline{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.stat-mini-grid,.vendor-grid,.form-inline{grid-template-columns:1fr}}
+
+.gallery-toolbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.gallery-toolbar .input,.gallery-toolbar select{max-width:240px}
+.apartment-gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.media-card{overflow:hidden;border:1px solid var(--line);border-radius:16px;background:var(--panel);box-shadow:var(--shadow)}
+.media-cover{position:relative;aspect-ratio:16/10;background:#0b1020;overflow:hidden;cursor:pointer}
+.media-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.media-video-placeholder{width:100%;height:100%;display:grid;place-items:center;background:linear-gradient(135deg,#111827,#1f2937);color:#fff}
+.media-play{width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,.16);display:grid;place-items:center;font-size:26px;border:1px solid rgba(255,255,255,.24)}
+.media-type-badge{position:absolute;top:9px;left:9px;padding:5px 8px;border-radius:999px;background:rgba(15,23,42,.75);color:#fff;font-size:10px;font-weight:700}
+.media-body{padding:12px}.media-body h4{margin:0 0 6px;font-size:14px}
+.media-meta{display:flex;gap:7px;flex-wrap:wrap;color:var(--muted);font-size:11px}
+.media-notes{margin-top:8px;color:var(--muted);font-size:11px;line-height:1.6}
+.media-actions{display:flex;gap:7px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.media-actions .btn{flex:1}.gallery-filter-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.media-viewer-box{width:min(1000px,96vw);max-height:92vh;background:var(--panel);border-radius:18px;overflow:hidden}
+.media-viewer-frame{width:100%;height:min(70vh,720px);border:0;background:#000}
+.media-viewer-image{display:block;max-width:100%;max-height:75vh;margin:auto;object-fit:contain;background:#000}
+@media(max-width:1000px){.apartment-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.apartment-gallery{grid-template-columns:1fr}.gallery-toolbar .input,.gallery-toolbar select{max-width:none;width:100%}}
+
 </style>
 </head>
 <body>
@@ -156,7 +177,8 @@ body.is-admin .admin-flex{display:flex} .admin-flex{display:none}
   <button data-page="transactions">الحركات المالية</button>
   <button data-page="budget">الميزانية</button>
   <button data-page="progress">التقدم</button>
-  <button data-page="photos">الصور</button>
+  <button data-page="photos">صور الإيصالات والتحويلات</button>
+  <button data-page="apartmentGallery">معرض الشقة</button>
   <button data-page="vendors">الموردون والمقاولون</button>
   <button data-page="dues">المستحقات</button>
   <button data-page="tasks">المهام</button>
@@ -270,7 +292,21 @@ body.is-admin .admin-flex{display:flex} .admin-flex{display:none}
  </section>
 
  <section class="page" id="photos">
-  <div class="card section"><div class="section-head"><div><h3>الإيصالات والصور</h3><small>الصور المرفقة بالحركات</small></div></div><div class="gallery" id="gallery"></div></div>
+  <div class="card section"><div class="section-head"><div><h3>صور الإيصالات والتحويلات</h3><small>الصور المرفقة بالحركات المالية</small></div></div><div class="gallery" id="gallery"></div></div>
+ </section>
+
+ <section class="page" id="apartmentGallery">
+  <div class="card section">
+   <div class="section-head"><div><h3>معرض شقة سانت فاتيما</h3><small>صور وفيديوهات تقدم أعمال التشطيب</small></div><button class="btn primary admin-only" onclick="openGalleryMedia()">+ إضافة صورة / فيديو</button></div>
+   <div class="gallery-toolbar">
+    <button class="btn gallery-filter-btn active" onclick="setGalleryType('',this)">الكل</button>
+    <button class="btn gallery-filter-btn" onclick="setGalleryType('image',this)">📷 صور</button>
+    <button class="btn gallery-filter-btn" onclick="setGalleryType('video',this)">🎬 فيديوهات</button>
+    <select id="galleryCategoryFilter" onchange="renderApartmentGallery()"><option value="">كل الأقسام</option></select>
+    <input id="gallerySearch" class="input" placeholder="بحث في المعرض..." oninput="renderApartmentGallery()">
+   </div>
+   <div id="apartmentGalleryGrid" class="apartment-gallery"></div>
+  </div>
  </section>
 
  <section class="page" id="vendors">
@@ -361,6 +397,27 @@ body.is-admin .admin-flex{display:flex} .admin-flex{display:none}
  </div>
 </div>
 
+<div class="modal" id="galleryMediaModal">
+ <div class="modal-box">
+  <div class="modal-head"><h3 id="galleryModalTitle">إضافة للمعرض</h3><button class="btn" onclick="closeModal('galleryMediaModal')">✕</button></div>
+  <div class="modal-body"><div class="form-grid">
+   <div><label class="title">النوع</label><select id="gmType"><option value="image">صورة</option><option value="video">فيديو</option></select></div>
+   <div><label class="title">التاريخ</label><input id="gmDate" class="input" type="date"></div>
+   <div class="full"><label class="title">العنوان</label><input id="gmTitle" class="input" placeholder="مثال: تشطيب حمام الضيوف"></div>
+   <div><label class="title">القسم</label><input id="gmCategory" class="input" list="galleryCategoryOptions" placeholder="مثال: سباكة"><datalist id="galleryCategoryOptions"></datalist></div>
+   <div><label class="title">رابط Google Drive</label><input id="gmDriveUrl" class="input" placeholder="https://drive.google.com/file/d/..."></div>
+   <div class="full"><label class="title">ملاحظات</label><textarea id="gmNotes" placeholder="اختياري"></textarea></div>
+  </div><p class="login-note" style="margin-top:12px">لازم الملف على Google Drive يكون متاح بخيار <b>Anyone with the link / Viewer</b>.</p></div>
+  <div class="modal-foot"><button class="btn primary" onclick="saveGalleryMedia()">حفظ</button><button class="btn" onclick="closeModal('galleryMediaModal')">إلغاء</button></div>
+ </div>
+</div>
+<div class="modal" id="galleryViewerModal">
+ <div class="media-viewer-box">
+  <div class="modal-head"><div><h3 id="galleryViewerTitle" style="margin:0">عرض الوسائط</h3><small id="galleryViewerMeta" style="color:var(--muted)"></small></div><button class="btn" onclick="closeGalleryViewer()">✕</button></div>
+  <div id="galleryViewerContent" style="background:#000;display:grid;place-items:center"></div>
+ </div>
+</div>
+
 <div class="modal" id="imgModal" onclick="closeModal('imgModal')"><img id="bigImg" style="max-width:90vw;max-height:85vh;border-radius:14px"></div>
 
 <div id="backupStatus" class="backup-status"></div>
@@ -375,6 +432,9 @@ let vendors=[];
 let dues=[];
 let tasks=[];
 let auditLogs=[];
+let galleryMedia=[];
+let galleryTypeFilter="";
+let galleryEditingId=null;
 let settings={totalBudget:0,categoryBudgets:{},progress:{},apartmentArea:0};
 let currentUser=null;
 let editingId=null;
@@ -403,14 +463,15 @@ function updateRole(){
  $("totalBudgetInput").disabled=!isAdmin();
 }
 async function loadData(){
- const [txRes,setRes,recRes,vendorRes,dueRes,taskRes,auditRes]=await Promise.all([
+ const [txRes,setRes,recRes,vendorRes,dueRes,taskRes,auditRes,galleryRes]=await Promise.all([
    sb.from("transactions").select("*").order("transaction_date",{ascending:false}).order("created_at",{ascending:false}),
    sb.from("app_settings").select("*"),
    sb.from("transaction_receipts").select("*").order("created_at",{ascending:true}),
    sb.from("vendors").select("*").order("name",{ascending:true}),
    sb.from("dues").select("*").order("created_at",{ascending:false}),
    sb.from("tasks").select("*").order("created_at",{ascending:false}),
-   sb.from("audit_log").select("*").order("created_at",{ascending:false}).limit(100)
+   sb.from("audit_log").select("*").order("created_at",{ascending:false}).limit(100),
+   sb.from("gallery_media").select("*").order("media_date",{ascending:false}).order("created_at",{ascending:false})
  ]);
  if(txRes.error) console.error(txRes.error); else transactions=txRes.data||[];
  if(!recRes.error){
@@ -428,6 +489,7 @@ async function loadData(){
  dues=dueRes.error?[]:(dueRes.data||[]);
  tasks=taskRes.error?[]:(taskRes.data||[]);
  auditLogs=auditRes.error?[]:(auditRes.data||[]);
+ galleryMedia=galleryRes.error?[]:(galleryRes.data||[]);
  renderAll();
 }
 function fillSelects(){
@@ -527,7 +589,7 @@ function renderPhotos(){
  }
  $("gallery").innerHTML=arr.length?arr.map(({tx:x,receipt:r})=>`<div class="card photo"><img src="${receiptUrl(r.receipt_path)}" onclick="showImg('${r.receipt_path}')"><div><b>${esc(x.description||"مرفق")}</b><span>${x.transaction_date} • ${x.type==="sent"?"مبلغ مضاف":esc(x.category||"")}</span></div></div>`).join(""):'<div class="empty" style="grid-column:1/-1">لا توجد صور مرفقة</div>';
 }
-function renderAll(){renderDashboard();renderMonths();renderTransactions();renderBudget();renderProgress();renderPhotos();renderVendors();renderDues();renderTasks();renderAudit()}
+function renderAll(){renderDashboard();renderMonths();renderTransactions();renderBudget();renderProgress();renderPhotos();renderVendors();renderDues();renderTasks();renderAudit();renderApartmentGallery()}
 function openTx(){
  if(!isAdmin())return;editingId=null;$("txModalTitle").textContent="إضافة حركة مالية";$("txType").value="expense";$("txDate").value=new Date().toISOString().slice(0,10);$("txAmount").value="";$("txPaidTo").value="";$("txDesc").value="";$("txNotes").value="";$("txReceipt").value="";toggleCategory();$("txModal").classList.add("show");
 }
@@ -1126,6 +1188,149 @@ function renderAudit(){
  $("auditList").innerHTML=auditLogs.length?auditLogs.map(a=>`
   <div class="audit-item"><b>${esc(a.action)} • ${esc(a.entity)}</b><span>${esc(a.details||"")}</span><span>${new Date(a.created_at).toLocaleString("ar-EG")} ${a.user_email?`• ${esc(a.user_email)}`:""}</span></div>
  `).join(""):'<div class="empty">لا توجد تعديلات مسجلة بعد.</div>';
+}
+
+
+function extractDriveFileId(url){
+ if(!url)return "";
+ const s=String(url).trim();
+ let m=s.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+ if(m)return m[1];
+ m=s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+ if(m)return m[1];
+ m=s.match(/\/d\/([a-zA-Z0-9_-]+)/);
+ if(m)return m[1];
+ if(/^[a-zA-Z0-9_-]{15,}$/.test(s))return s;
+ return "";
+}
+function drivePreviewUrl(id){
+ return id?`https://drive.google.com/file/d/${id}/preview`:"";
+}
+function driveThumbUrl(id){
+ return id?`https://drive.google.com/thumbnail?id=${id}&sz=w1200`:"";
+}
+function galleryCategories(){
+ const d=["عام","مباني / أعمال مدنية","سباكة","كهرباء","تكييف وتهوية","جبس / أسقف","سيراميك / رخام","حمامات","مطبخ","نجارة / أبواب","ألوميتال / شبابيك","دهانات","إضاءة"];
+ return [...new Set([...d,...galleryMedia.map(x=>x.category).filter(Boolean)])];
+}
+function populateGalleryCategories(){
+ const cats=galleryCategories();
+ const f=$("galleryCategoryFilter");
+ if(f){
+   const cur=f.value;
+   f.innerHTML='<option value="">كل الأقسام</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
+   f.value=cur;
+ }
+ const l=$("galleryCategoryOptions");
+ if(l)l.innerHTML=cats.map(c=>`<option value="${esc(c)}"></option>`).join("");
+}
+function setGalleryType(type,btn){
+ galleryTypeFilter=type;
+ document.querySelectorAll(".gallery-filter-btn").forEach(b=>b.classList.remove("active"));
+ if(btn)btn.classList.add("active");
+ renderApartmentGallery();
+}
+function renderApartmentGallery(){
+ populateGalleryCategories();
+ const q=($("gallerySearch")?.value||"").toLowerCase();
+ const cat=$("galleryCategoryFilter")?.value||"";
+ const rows=galleryMedia.filter(x=>{
+   const blob=[x.title,x.category,x.notes].join(" ").toLowerCase();
+   return(!galleryTypeFilter||x.media_type===galleryTypeFilter)&&(!cat||x.category===cat)&&(!q||blob.includes(q));
+ });
+ const g=$("apartmentGalleryGrid");
+ if(!g)return;
+ g.innerHTML=rows.length?rows.map(x=>{
+   const cover=x.media_type==="image"
+    ?`<img src="${driveThumbUrl(x.file_id)}" alt="${esc(x.title||"صورة")}">`
+    :`<div class="media-video-placeholder"><div class="media-play">▶</div></div>`;
+   return `<div class="media-card">
+    <div class="media-cover" onclick="openGalleryViewer('${x.id}')">${cover}<span class="media-type-badge">${x.media_type==="video"?"🎬 فيديو":"📷 صورة"}</span></div>
+    <div class="media-body">
+      <h4>${esc(x.title||"بدون عنوان")}</h4>
+      <div class="media-meta"><span>${esc(x.category||"عام")}</span>${x.media_date?`<span>• ${x.media_date}</span>`:""}</div>
+      ${x.notes?`<div class="media-notes">${esc(x.notes)}</div>`:""}
+      ${isAdmin()?`<div class="media-actions"><button class="btn" onclick="editGalleryMedia('${x.id}')">تعديل</button><button class="btn danger" onclick="deleteGalleryMedia('${x.id}')">حذف</button></div>`:""}
+    </div>
+   </div>`;
+ }).join(""):'<div class="empty" style="grid-column:1/-1">لا توجد صور أو فيديوهات في المعرض حتى الآن.</div>';
+}
+function openGalleryMedia(){
+ if(!isAdmin())return;
+ galleryEditingId=null;
+ $("galleryModalTitle").textContent="إضافة للمعرض";
+ $("gmType").value="image";
+ $("gmDate").value=new Date().toISOString().slice(0,10);
+ $("gmTitle").value="";
+ $("gmCategory").value="";
+ $("gmDriveUrl").value="";
+ $("gmNotes").value="";
+ populateGalleryCategories();
+ $("galleryMediaModal").classList.add("show");
+}
+function editGalleryMedia(id){
+ if(!isAdmin())return;
+ const x=galleryMedia.find(m=>m.id===id);
+ if(!x)return;
+ galleryEditingId=id;
+ $("galleryModalTitle").textContent="تعديل عنصر المعرض";
+ $("gmType").value=x.media_type;
+ $("gmDate").value=x.media_date||"";
+ $("gmTitle").value=x.title||"";
+ $("gmCategory").value=x.category||"";
+ $("gmDriveUrl").value=x.drive_url||"";
+ $("gmNotes").value=x.notes||"";
+ populateGalleryCategories();
+ $("galleryMediaModal").classList.add("show");
+}
+async function saveGalleryMedia(){
+ if(!isAdmin())return;
+ const title=$("gmTitle").value.trim();
+ const url=$("gmDriveUrl").value.trim();
+ const fileId=extractDriveFileId(url);
+ if(!title){alert("أدخل عنواناً للعنصر.");return}
+ if(!fileId){alert("رابط Google Drive غير واضح.");return}
+ const payload={
+   title,
+   media_type:$("gmType").value,
+   category:$("gmCategory").value.trim()||"عام",
+   media_date:$("gmDate").value||null,
+   drive_url:url,
+   file_id:fileId,
+   notes:$("gmNotes").value.trim()
+ };
+ let error;
+ if(galleryEditingId)({error}=await sb.from("gallery_media").update(payload).eq("id",galleryEditingId));
+ else({error}=await sb.from("gallery_media").insert(payload));
+ if(error){alert(error.message);return}
+ await logAudit(galleryEditingId?"تعديل":"إضافة","معرض الشقة",title);
+ closeModal("galleryMediaModal");
+ galleryEditingId=null;
+ await loadData();
+}
+async function deleteGalleryMedia(id){
+ if(!isAdmin()||!confirm("هل تريد حذف هذا العنصر من المعرض؟"))return;
+ const x=galleryMedia.find(m=>m.id===id);
+ const {error}=await sb.from("gallery_media").delete().eq("id",id);
+ if(error){alert(error.message);return}
+ await logAudit("حذف","معرض الشقة",x?.title||"");
+ await loadData();
+}
+function openGalleryViewer(id){
+ const x=galleryMedia.find(m=>m.id===id);
+ if(!x)return;
+ $("galleryViewerTitle").textContent=x.title||"عرض الوسائط";
+ $("galleryViewerMeta").textContent=[x.category,x.media_date].filter(Boolean).join(" • ");
+ const c=$("galleryViewerContent");
+ c.innerHTML=x.media_type==="video"
+  ?`<iframe class="media-viewer-frame" src="${drivePreviewUrl(x.file_id)}" allow="autoplay; fullscreen" allowfullscreen></iframe>`
+  :`<img class="media-viewer-image" src="${driveThumbUrl(x.file_id)}" alt="${esc(x.title||"صورة")}">`;
+ $("galleryViewerModal").classList.add("show");
+}
+function closeGalleryViewer(){
+ const c=$("galleryViewerContent");
+ if(c)c.innerHTML="";
+ closeModal("galleryViewerModal");
 }
 
 function showImg(path){$("bigImg").src=receiptUrl(path);$("imgModal").classList.add("show")}
