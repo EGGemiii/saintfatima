@@ -1242,8 +1242,8 @@ function renderApartmentGallery(){
  if(!g)return;
  g.innerHTML=rows.length?rows.map(x=>{
    const cover=x.media_type==="image"
-    ?`<img src="${driveThumbUrl(x.file_id)}" alt="${esc(x.title||"صورة")}">`
-    :`<div class="media-video-placeholder"><div class="media-play">▶</div></div>`;
+    ?`<img src="${driveThumbUrl(x.file_id)}" alt="${esc(x.title||"صورة")}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><div class="media-video-placeholder" style="display:none"><div class="media-play">🖼️</div></div>`
+    :`<img src="${driveThumbUrl(x.file_id)}" alt="${esc(x.title||"فيديو")}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><div class="media-video-placeholder" style="display:none"><div class="media-play">▶</div></div><div class="media-play" style="position:absolute;inset:0;margin:auto;z-index:2;pointer-events:none">▶</div>`;
    return `<div class="media-card">
     <div class="media-cover" onclick="openGalleryViewer('${x.id}')">${cover}<span class="media-type-badge">${x.media_type==="video"?"🎬 فيديو":"📷 صورة"}</span></div>
     <div class="media-body">
