@@ -321,6 +321,17 @@ body.is-admin .page[data-admin-page="true"].active{
   display:block !important;
 }
 
+
+.drive-import-progress{
+  margin-top:10px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:color-mix(in srgb,var(--panel) 95%,var(--line) 5%);
+  font-size:12px;
+  line-height:1.6;
+}
+
 </style>
 </head>
 <body>
@@ -451,7 +462,10 @@ body.is-admin .page[data-admin-page="true"].active{
 
  <section class="page" id="apartmentGallery">
   <div class="card section">
-   <div class="section-head"><div><h3>معرض شقة سانت فاتيما</h3><small>صور وفيديوهات تقدم أعمال التشطيب</small></div><button class="btn primary admin-only" onclick="openGalleryMedia()">+ إضافة صورة / فيديو</button></div>
+   <div class="section-head"><div><h3>معرض شقة سانت فاتيما</h3><small>صور وفيديوهات تقدم أعمال التشطيب</small></div><div class="admin-flex" style="gap:8px;flex-wrap:wrap">
+     <button class="btn primary" onclick="openGalleryMedia()">+ إضافة صورة / فيديو</button>
+     <button class="btn" onclick="openDriveImport()">☁️ استيراد من Google Drive</button>
+    </div></div>
    <div class="gallery-toolbar">
     <button class="btn gallery-filter-btn active" onclick="setGalleryType('',this)">الكل</button>
     <button class="btn gallery-filter-btn" onclick="setGalleryType('image',this)">📷 صور</button>
@@ -551,6 +565,41 @@ body.is-admin .page[data-admin-page="true"].active{
  </div>
 </div>
 
+
+<div class="modal" id="driveImportModal">
+ <div class="modal-box" style="max-width:620px">
+  <div class="modal-head">
+   <h3 style="margin:0">استيراد من Google Drive Folder</h3>
+   <button class="btn" onclick="closeModal('driveImportModal')">✕</button>
+  </div>
+  <div class="modal-body">
+   <label class="title">رابط فولدر Google Drive</label>
+   <input id="driveFolderUrl" class="input" placeholder="https://drive.google.com/drive/folders/...">
+   <div class="form-grid" style="margin-top:12px">
+    <div>
+     <label class="title">القسم الافتراضي</label>
+     <input id="driveImportCategory" class="input" list="galleryCategoryOptions" placeholder="مثال: كهرباء">
+    </div>
+    <div>
+     <label class="title">التاريخ الافتراضي</label>
+     <input id="driveImportDate" class="input" type="date">
+    </div>
+   </div>
+   <div style="margin-top:12px">
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px">
+     <input id="driveUseFileDate" type="checkbox" checked>
+     استخدام تاريخ إنشاء الملف في Google Drive عند توفره
+    </label>
+   </div>
+   <div id="driveImportStatus" class="login-note" style="margin-top:14px"></div>
+  </div>
+  <div class="modal-foot">
+   <button class="btn primary" onclick="importDriveFolder()">استيراد الملفات</button>
+   <button class="btn" onclick="closeModal('driveImportModal')">إلغاء</button>
+  </div>
+ </div>
+</div>
+
 <div class="modal" id="galleryMediaModal">
  <div class="modal-box">
   <div class="modal-head"><h3 id="galleryModalTitle">إضافة للمعرض</h3><button class="btn" onclick="closeModal('galleryMediaModal')">✕</button></div>
@@ -595,6 +644,7 @@ body.is-admin .page[data-admin-page="true"].active{
 <script>
 const SUPABASE_URL = 'https://bzwqjcplyxrxdzvhssxe.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_UcHIT9ivHLsvBTduIMbHZA_8bjtf7HP';
+const GOOGLE_DRIVE_API_KEY = 'AIzaSyBjZCH51OR3RudjmRYgJi2zK6ms4WWX3PA';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const categories=["مباني / أعمال مدنية","سباكة","كهرباء","تكييف وتهوية","جبس / أسقف","سيراميك / رخام","حمامات","مطبخ","نجارة / أبواب","ألوميتال / شبابيك","دهانات","إضاءة","أثاث","أجهزة","عمالة","نقل","أخرى"];
@@ -1489,6 +1539,112 @@ function renderApartmentGallery(){
    </div>`;
  }).join(""):'<div class="empty" style="grid-column:1/-1">لا توجد صور أو فيديوهات في المعرض حتى الآن.</div>';
 }
+
+function extractDriveFolderId(url){
+ if(!url)return"";
+ const s=String(url).trim();
+ let m=s.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+ if(m)return m[1];
+ m=s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+ if(m)return m[1];
+ if(/^[a-zA-Z0-9_-]{15,}$/.test(s))return s;
+ return"";
+}
+function openDriveImport(){
+ if(!isAdmin())return;
+ $("driveFolderUrl").value="";
+ $("driveImportCategory").value="";
+ $("driveImportDate").value=new Date().toISOString().slice(0,10);
+ $("driveUseFileDate").checked=true;
+ $("driveImportStatus").innerHTML='ضع رابط الفولدر، ويجب أن يكون <b>Anyone with the link → Viewer</b>.';
+ populateGalleryCategories();
+ $("driveImportModal").classList.add("show");
+}
+async function fetchDriveFolderFiles(folderId){
+ let files=[];
+ let pageToken="";
+ do{
+   const q=`'${folderId}' in parents and trashed = false`;
+   const params=new URLSearchParams({
+     q:q,
+     key:GOOGLE_DRIVE_API_KEY,
+     pageSize:"1000",
+     fields:"nextPageToken,files(id,name,mimeType,createdTime,modifiedTime,webViewLink)"
+   });
+   if(pageToken)params.set("pageToken",pageToken);
+   const res=await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`);
+   const data=await res.json();
+   if(!res.ok)throw new Error(data?.error?.message||`Google Drive API error (${res.status})`);
+   files.push(...(data.files||[]));
+   pageToken=data.nextPageToken||"";
+ }while(pageToken);
+ return files;
+}
+function driveMimeToGalleryType(mime){
+ if(String(mime||"").startsWith("image/"))return"image";
+ if(String(mime||"").startsWith("video/"))return"video";
+ return null;
+}
+function isoDateOnly(v){
+ if(!v)return null;
+ const d=new Date(v);
+ if(Number.isNaN(d.getTime()))return null;
+ return d.toISOString().slice(0,10);
+}
+async function importDriveFolder(){
+ if(!isAdmin())return;
+ const folderUrl=$("driveFolderUrl").value.trim();
+ const folderId=extractDriveFolderId(folderUrl);
+ const status=$("driveImportStatus");
+ if(!folderId){alert("رابط Google Drive Folder غير صحيح.");return}
+ const defaultCategory=$("driveImportCategory").value.trim()||"عام";
+ const defaultDate=$("driveImportDate").value||null;
+ const useFileDate=$("driveUseFileDate").checked;
+ try{
+   status.innerHTML='<div class="drive-import-progress">جارٍ قراءة ملفات الفولدر من Google Drive...</div>';
+   const allFiles=await fetchDriveFolderFiles(folderId);
+   const mediaFiles=allFiles.filter(f=>driveMimeToGalleryType(f.mimeType));
+   if(!mediaFiles.length){
+     status.innerHTML='<div class="drive-import-progress">لم يتم العثور على صور أو فيديوهات داخل هذا الفولدر.</div>';
+     return;
+   }
+   const {data:existing,error:existingErr}=await sb.from("gallery_media").select("file_id");
+   if(existingErr)throw existingErr;
+   const existingIds=new Set((existing||[]).map(x=>x.file_id).filter(Boolean));
+   const newFiles=mediaFiles.filter(f=>!existingIds.has(f.id));
+   const skipped=mediaFiles.length-newFiles.length;
+   if(!newFiles.length){
+     status.innerHTML=`<div class="drive-import-progress">كل الملفات موجودة بالفعل في المعرض. تم العثور على ${mediaFiles.length} ملف، ولا يوجد جديد للاستيراد.</div>`;
+     return;
+   }
+   status.innerHTML=`<div class="drive-import-progress">تم العثور على ${mediaFiles.length} صورة/فيديو. جديد: ${newFiles.length}. موجود مسبقاً: ${skipped}. جارٍ الاستيراد...</div>`;
+   const rows=newFiles.map(f=>({
+     title:f.name||"ملف من Google Drive",
+     media_type:driveMimeToGalleryType(f.mimeType),
+     category:defaultCategory,
+     media_date:(useFileDate?isoDateOnly(f.createdTime):null)||defaultDate,
+     drive_url:f.webViewLink||`https://drive.google.com/file/d/${f.id}/view`,
+     file_id:f.id,
+     notes:""
+   }));
+   let imported=0;
+   const chunkSize=100;
+   for(let i=0;i<rows.length;i+=chunkSize){
+     const chunk=rows.slice(i,i+chunkSize);
+     const {error}=await sb.from("gallery_media").insert(chunk);
+     if(error)throw error;
+     imported+=chunk.length;
+     status.innerHTML=`<div class="drive-import-progress">جارٍ الاستيراد: ${imported} / ${rows.length}</div>`;
+   }
+   await logAudit("استيراد","معرض الشقة",`استيراد ${imported} ملف من Google Drive`);
+   await loadData();
+   status.innerHTML=`<div class="drive-import-progress"><b>تم الاستيراد بنجاح.</b><br>تم إضافة ${imported} ملف${skipped?`، وتم تجاهل ${skipped} ملف موجود مسبقاً.`:"."}</div>`;
+ }catch(e){
+   console.error(e);
+   status.innerHTML=`<div class="drive-import-progress" style="color:#dc2626">تعذر الاستيراد: ${esc(e.message)}</div>`;
+ }
+}
+
 function openGalleryMedia(){
  if(!isAdmin())return;
  galleryEditingId=null;
